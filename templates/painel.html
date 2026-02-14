@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Motoboy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 pb-20">
+    <nav class="bg-black text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <span class="font-bold text-yellow-400">PAINEL SOS</span>
+            <a href="/logout" class="text-sm font-bold text-gray-400">Sair</a>
+        </div>
+    </nav>
+
+    <div class="container mx-auto px-4 mt-6 max-w-lg">
+        
+        <div class="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-6 flex items-center gap-4">
+            <div class="bg-white p-2 rounded">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://{{ request.host }}/{{ user.slug }}" class="w-20 h-20">
+            </div>
+            <div>
+                <p class="text-xs font-bold text-gray-500 uppercase">Seu Link de Emergência:</p>
+                <a href="/{{ user.slug }}" target="_blank" class="text-lg font-black text-gray-800 underline">/{{ user.slug }}</a>
+                <p class="text-xs text-gray-600 mt-1">Cole o adesivo e teste o QR Code!</p>
+            </div>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="mb-6 p-4 rounded-lg bg-green-100 text-green-800 font-bold border border-green-200">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" enctype="multipart/form-data" class="space-y-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 class="font-bold text-lg mb-4 border-b pb-2">1. Identificação</h3>
+                <div class="space-y-4">
+                    <div class="flex items-center gap-4">
+                        <img src="{{ user.foto_url }}" class="w-16 h-16 rounded-full object-cover bg-gray-200">
+                        <input type="file" name="foto" class="text-sm text-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Nome Completo</label>
+                        <input type="text" name="nome" value="{{ user.nome_completo or '' }}" class="w-full border rounded p-3">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Data Nascimento</label>
+                        <input type="date" name="nascimento" value="{{ user.data_nascimento }}" class="w-full border rounded p-3">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 class="font-bold text-lg mb-4 border-b pb-2 text-red-600">2. Emergência Médica</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Tipo Sanguíneo</label>
+                        <select name="sangue" class="w-full border rounded p-3 bg-white">
+                            <option value="{{ user.tipo_sanguineo }}">{{ user.tipo_sanguineo or 'Selecione' }}</option>
+                            <option value="A+">A+</option><option value="A-">A-</option>
+                            <option value="B+">B+</option><option value="B-">B-</option>
+                            <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                            <option value="O+">O+</option><option value="O-">O-</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Alergias / Remédios / Doenças</label>
+                        <textarea name="alergias" rows="4" class="w-full border rounded p-3" placeholder="Ex: Diabético, Alérgico a Dipirona...">{{ user.alergias_condicoes or '' }}</textarea>
+                    </div>
+                     <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Plano de Saúde (Opcional)</label>
+                        <input type="text" name="plano" value="{{ user.plano_saude or '' }}" class="w-full border rounded p-3" placeholder="Ex: Amil - Carteirinha 123456">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <h3 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600">3. Contato de Emergência</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Nome do Parente/Amigo</label>
+                        <input type="text" name="contato_nome" value="{{ user.contato_nome or '' }}" class="w-full border rounded p-3" placeholder="Ex: Maria (Esposa)">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">WhatsApp (Com DDD)</label>
+                        <input type="tel" name="contato_tel" value="{{ user.contato_telefone or '' }}" class="w-full border rounded p-3" placeholder="11999999999">
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition">SALVAR DADOS</button>
+        </form>
+    </div>
+</body>
+</html>
