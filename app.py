@@ -12,8 +12,9 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "chave_secreta_sos_motoboy")
 
 # --- CONFIGURAÇÕES ---
+# Ajuste aqui se sua URL do Directus for diferente
 DIRECTUS_URL = os.getenv("DIRECTUS_URL", "https://api2.leanttro.com").rstrip('/')
-DIRECTUS_TOKEN = os.getenv("DIRECTUS_TOKEN", "") # Token com permissão de escrita em 'motoboys'
+DIRECTUS_TOKEN = os.getenv("DIRECTUS_TOKEN", "") 
 
 def get_headers():
     return {"Authorization": f"Bearer {DIRECTUS_TOKEN}", "Content-Type": "application/json"}
@@ -44,22 +45,22 @@ def index():
         return redirect('/painel')
     return render_template('index.html')
 
-# --- CADASTRO (ATIVAR ADESIVO) ---
+# --- CADASTRO ---
 @app.route('/cadastro', methods=['GET', 'POST'])
 def cadastro():
     codigo_pre = request.args.get('codigo', '')
     
     if request.method == 'POST':
-        slug = request.form.get('slug').lower().strip() # O CÓDIGO DO ADESIVO
+        slug = request.form.get('slug').lower().strip()
         nome = request.form.get('nome')
         senha = request.form.get('senha')
         
-        # Verifica se o código já existe
         headers = get_headers()
+        # Verifica duplicidade
         check = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[slug][_eq]={slug}", headers=headers)
         
         if check.status_code == 200 and len(check.json()['data']) > 0:
-            flash('Este código de adesivo já está em uso ou cadastrado!', 'error')
+            flash('Este código de adesivo já está em uso!', 'error')
             return render_template('cadastro.html', codigo=slug)
 
         payload = {
@@ -74,7 +75,7 @@ def cadastro():
             if r.status_code in [200, 201]:
                 motoboy_id = r.json()['data']['id']
                 session['motoboy_id'] = motoboy_id
-                flash('Cadastro realizado! Preencha seus dados de emergência.', 'success')
+                flash('Cadastro realizado! Preencha seus dados.', 'success')
                 return redirect('/painel')
             else:
                 flash(f'Erro ao cadastrar: {r.text}', 'error')
@@ -102,7 +103,7 @@ def login():
 
     return render_template('login.html')
 
-# --- PAINEL (EDITAR DADOS) ---
+# --- PAINEL ---
 @app.route('/painel', methods=['GET', 'POST'])
 def painel():
     mid = session.get('motoboy_id')
@@ -132,6 +133,8 @@ def painel():
 
     # GET
     r = requests.get(f"{DIRECTUS_URL}/items/motoboys/{mid}", headers=headers)
+    if r.status_code != 200: return redirect('/logout')
+    
     user = r.json()['data']
     user['foto_url'] = get_img_url(user.get('foto'))
     
@@ -143,13 +146,10 @@ def logout():
     session.clear()
     return redirect('/')
 
-# --- ROTA DO QR CODE (PERFIL PÚBLICO) ---
-# Captura qualquer coisa (001, joao, etc)
+# --- ROTA PÚBLICA (SOS) ---
 @app.route('/<slug>')
 def perfil_publico(slug):
     slug = slug.lower().strip()
-    
-    # Ignora arquivos estáticos se passarem
     if slug in ['static', 'favicon.ico']: return ""
 
     headers = get_headers()
@@ -159,14 +159,12 @@ def perfil_publico(slug):
         r = requests.get(url, headers=headers)
         data = r.json().get('data')
         
-        # SE NÃO EXISTE: Manda para cadastro ativando esse código
         if not data:
             return redirect(f'/cadastro?codigo={slug}')
             
         motoboy = data[0]
         motoboy['foto_url'] = get_img_url(motoboy.get('foto'))
         
-        # Lógica simples de idade
         idade = ""
         if motoboy.get('data_nascimento'):
             born = datetime.strptime(motoboy['data_nascimento'], "%Y-%m-%d")
