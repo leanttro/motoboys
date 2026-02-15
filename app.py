@@ -133,7 +133,7 @@ def cadastro():
     if request.method == 'POST':
         slug = request.form.get('slug').lower().strip()
         nome = request.form.get('nome')
-        email = request.form.get('email').strip() # NOVO: Captura Email
+        email = request.form.get('email').strip()
         senha = request.form.get('senha')
         
         headers = get_headers()
@@ -154,7 +154,7 @@ def cadastro():
             "status": "published",
             "slug": slug,
             "nome_completo": nome,
-            "email": email, # NOVO: Salva Email
+            "email": email,
             "senha": generate_password_hash(senha)
         }
 
@@ -172,33 +172,33 @@ def cadastro():
 
     return render_template('cadastro.html', codigo=codigo_pre)
 
-# --- LOGIN ---
+# --- LOGIN (ALTERADO PARA EMAIL) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        slug = request.form.get('slug').lower().strip()
+        email = request.form.get('email').strip() # PEGA EMAIL AGORA
         senha = request.form.get('senha')
         
         headers = get_headers()
-        r = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[slug][_eq]={slug}", headers=headers)
+        # FILTRA POR EMAIL, NÃO MAIS POR SLUG
+        r = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
         data = r.json().get('data')
         
         if data and check_password_hash(data[0]['senha'], senha):
             session['motoboy_id'] = data[0]['id']
             return redirect('/painel')
         else:
-            flash('Código ou senha incorretos.', 'error')
+            flash('E-mail ou senha incorretos.', 'error')
 
     return render_template('login.html')
 
-# --- ESQUECEU SENHA (NOVA ROTA) ---
+# --- ESQUECEU SENHA ---
 @app.route('/esqueceu-senha', methods=['GET', 'POST'])
 def esqueceu_senha():
     if request.method == 'POST':
         email = request.form.get('email').strip()
         headers = get_headers()
         
-        # Busca usuário pelo e-mail no Directus
         r = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
         data = r.json().get('data')
         
@@ -224,11 +224,11 @@ def esqueceu_senha():
             
     return render_template('esqueceu_senha.html')
 
-# --- REDEFINIR SENHA (NOVA ROTA) ---
+# --- REDEFINIR SENHA ---
 @app.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
 def redefinir_senha(token):
     try:
-        email = serializer.loads(token, salt='recuperar-senha', max_age=3600) # Valido por 1 hora
+        email = serializer.loads(token, salt='recuperar-senha', max_age=3600)
     except:
         flash('Link inválido ou expirado.', 'error')
         return redirect('/login')
@@ -237,7 +237,6 @@ def redefinir_senha(token):
         nova_senha = request.form.get('senha')
         headers = get_headers()
         
-        # Busca ID do usuário pelo email novamente
         r = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
         data = r.json().get('data')
         
@@ -264,14 +263,14 @@ def painel():
 
         payload = {
             "nome_completo": request.form.get('nome'),
-            "email": request.form.get('email'), # Atualiza email se quiser
+            "email": request.form.get('email'),
             "data_nascimento": request.form.get('nascimento'),
             "tipo_sanguineo": request.form.get('sangue'),
             "alergias_condicoes": request.form.get('alergias'),
             "contato_nome": request.form.get('contato_nome'),
             "contato_telefone": request.form.get('contato_tel').replace(' ','').replace('-','').replace('(','').replace(')',''),
-            "contato_nome2": request.form.get('contato_nome2'), # NOVO
-            "contato_telefone2": request.form.get('contato_tel2').replace(' ','').replace('-','').replace('(','').replace(')',''), # NOVO
+            "contato_nome2": request.form.get('contato_nome2'),
+            "contato_telefone2": request.form.get('contato_tel2').replace(' ','').replace('-','').replace('(','').replace(')',''),
             "plano_saude": request.form.get('plano'),
             "dominio_proprio": dom_proprio
         }
