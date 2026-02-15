@@ -1,10 +1,14 @@
 from flask import Flask, render_template, request, redirect, session, flash, url_for, g
 import requests
 import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from itsdangerous import URLSafeTimedSerializer
 
 load_dotenv()
 
@@ -15,8 +19,17 @@ app.secret_key = os.getenv("SECRET_KEY", "chave_secreta_sos_motoboy")
 DIRECTUS_URL = os.getenv("DIRECTUS_URL", "https://api2.leanttro.com").rstrip('/')
 DIRECTUS_TOKEN = os.getenv("DIRECTUS_TOKEN", "") 
 
-# LISTA DE DOMÍNIOS DO SISTEMA (QUE NÃO DEVEM BUSCAR PERFIL AUTOMÁTICO)
-# Adicione aqui todos os domínios onde o sistema roda como "Plataforma"
+# Configurações de E-mail
+MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
+MAIL_PORT = int(os.getenv("MAIL_PORT", 465))
+MAIL_USERNAME = os.getenv("MAIL_USERNAME")
+MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
+MAIL_USE_SSL = os.getenv("MAIL_USE_SSL", "True") == "True"
+
+# Serializer para Tokens de Recuperação de Senha
+serializer = URLSafeTimedSerializer(app.secret_key)
+
+# LISTA DE DOMÍNIOS DO SISTEMA
 SYSTEM_DOMAINS = [
     'motoboys.leanttro.com',
     'sos.leanttro.com',
@@ -55,16 +68,34 @@ def calcular_idade(data_nasc):
     except:
         return ""
 
+def send_email(to_email, subject, html_body):
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = MAIL_USERNAME
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(html_body, 'html'))
+
+        if MAIL_USE_SSL:
+            server = smtplib.SMTP_SSL(MAIL_SERVER, MAIL_PORT)
+        else:
+            server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
+            server.starttls()
+            
+        server.login(MAIL_USERNAME, MAIL_PASSWORD)
+        server.sendmail(MAIL_USERNAME, to_email, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Erro ao enviar email: {e}")
+        return False
+
 # --- MIDDLEWARE: VERIFICA DOMÍNIO PRÓPRIO ---
 @app.before_request
 def verificar_dominio():
-    # Remove porta se existir (ex: leanttro.com:5000 -> leanttro.com)
     host_atual = request.host.split(':')[0].lower()
-    
     g.perfil_dominio = None
     
-    # Se o host NÃO for um dos domínios do sistema, tenta achar um motoboy dono desse domínio
-    # Verifica se o host atual contém algum dos domínios de sistema (para pegar subdomínios também)
     e_sistema = False
     for sys_d in SYSTEM_DOMAINS:
         if sys_d in host_atual:
@@ -73,8 +104,6 @@ def verificar_dominio():
             
     if not e_sistema:
         try:
-            # Busca motoboy pelo campo dominio_proprio
-            # Importante: O motoboy deve cadastrar o domínio exatamente como acessa (ex: www.joao.com.br)
             headers = get_headers()
             url = f"{DIRECTUS_URL}/items/motoboys?filter[dominio_proprio][_eq]={host_atual}&limit=1"
             r = requests.get(url, headers=headers)
@@ -90,15 +119,10 @@ def verificar_dominio():
 # --- ROTA RAIZ (HOME) ---
 @app.route('/')
 def index():
-    # 1. SE FOR DOMÍNIO PRÓPRIO (ex: www.joao.com.br), ABRE O PERFIL DIRETO
     if g.perfil_dominio:
         return render_template('sos.html', m=g.perfil_dominio, idade=calcular_idade(g.perfil_dominio.get('data_nascimento')))
-
-    # 2. SE JÁ TIVER LOGADO, VAI PRO PAINEL
     if session.get('motoboy_id'):
         return redirect('/painel')
-        
-    # 3. SE NÃO, MOSTRA A LANDING PAGE DO SISTEMA
     return render_template('index.html')
 
 # --- CADASTRO ---
@@ -109,20 +133,28 @@ def cadastro():
     if request.method == 'POST':
         slug = request.form.get('slug').lower().strip()
         nome = request.form.get('nome')
+        email = request.form.get('email').strip() # NOVO: Captura Email
         senha = request.form.get('senha')
         
         headers = get_headers()
-        # Verifica duplicidade
-        check = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[slug][_eq]={slug}", headers=headers)
         
-        if check.status_code == 200 and len(check.json()['data']) > 0:
+        # Verifica duplicidade de SLUG
+        check_slug = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[slug][_eq]={slug}", headers=headers)
+        if check_slug.status_code == 200 and len(check_slug.json()['data']) > 0:
             flash('Este código de adesivo já está em uso!', 'error')
+            return render_template('cadastro.html', codigo=slug)
+
+        # Verifica duplicidade de EMAIL
+        check_email = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
+        if check_email.status_code == 200 and len(check_email.json()['data']) > 0:
+            flash('Este e-mail já está cadastrado!', 'error')
             return render_template('cadastro.html', codigo=slug)
 
         payload = {
             "status": "published",
             "slug": slug,
             "nome_completo": nome,
+            "email": email, # NOVO: Salva Email
             "senha": generate_password_hash(senha)
         }
 
@@ -159,6 +191,66 @@ def login():
 
     return render_template('login.html')
 
+# --- ESQUECEU SENHA (NOVA ROTA) ---
+@app.route('/esqueceu-senha', methods=['GET', 'POST'])
+def esqueceu_senha():
+    if request.method == 'POST':
+        email = request.form.get('email').strip()
+        headers = get_headers()
+        
+        # Busca usuário pelo e-mail no Directus
+        r = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
+        data = r.json().get('data')
+        
+        if data:
+            user = data[0]
+            token = serializer.dumps(user['email'], salt='recuperar-senha')
+            link = url_for('redefinir_senha', token=token, _external=True)
+            
+            html = f"""
+            <h3>Recuperação de Senha - SOS Motoboy</h3>
+            <p>Olá {user['nome_completo']},</p>
+            <p>Clique no link abaixo para criar uma nova senha:</p>
+            <a href="{link}">{link}</a>
+            <p>Se você não solicitou, ignore este e-mail.</p>
+            """
+            
+            if send_email(email, "Redefinir Senha - SOS Motoboy", html):
+                flash('Link de recuperação enviado para seu e-mail.', 'success')
+            else:
+                flash('Erro ao enviar e-mail. Tente novamente.', 'error')
+        else:
+            flash('E-mail não encontrado no sistema.', 'error')
+            
+    return render_template('esqueceu_senha.html')
+
+# --- REDEFINIR SENHA (NOVA ROTA) ---
+@app.route('/redefinir-senha/<token>', methods=['GET', 'POST'])
+def redefinir_senha(token):
+    try:
+        email = serializer.loads(token, salt='recuperar-senha', max_age=3600) # Valido por 1 hora
+    except:
+        flash('Link inválido ou expirado.', 'error')
+        return redirect('/login')
+        
+    if request.method == 'POST':
+        nova_senha = request.form.get('senha')
+        headers = get_headers()
+        
+        # Busca ID do usuário pelo email novamente
+        r = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
+        data = r.json().get('data')
+        
+        if data:
+            user_id = data[0]['id']
+            payload = {"senha": generate_password_hash(nova_senha)}
+            requests.patch(f"{DIRECTUS_URL}/items/motoboys/{user_id}", headers=headers, json=payload)
+            
+            flash('Senha alterada com sucesso! Faça login.', 'success')
+            return redirect('/login')
+            
+    return render_template('redefinir_senha.html', token=token)
+
 # --- PAINEL ---
 @app.route('/painel', methods=['GET', 'POST'])
 def painel():
@@ -168,18 +260,20 @@ def painel():
     headers = get_headers()
     
     if request.method == 'POST':
-        # Limpa o domínio para salvar limpo (sem http/https e barra final)
         dom_proprio = request.form.get('dominio_proprio', '').replace('http://', '').replace('https://', '').rstrip('/')
 
         payload = {
             "nome_completo": request.form.get('nome'),
+            "email": request.form.get('email'), # Atualiza email se quiser
             "data_nascimento": request.form.get('nascimento'),
             "tipo_sanguineo": request.form.get('sangue'),
             "alergias_condicoes": request.form.get('alergias'),
             "contato_nome": request.form.get('contato_nome'),
             "contato_telefone": request.form.get('contato_tel').replace(' ','').replace('-','').replace('(','').replace(')',''),
+            "contato_nome2": request.form.get('contato_nome2'), # NOVO
+            "contato_telefone2": request.form.get('contato_tel2').replace(' ','').replace('-','').replace('(','').replace(')',''), # NOVO
             "plano_saude": request.form.get('plano'),
-            "dominio_proprio": dom_proprio # SALVA O DOMÍNIO AQUI
+            "dominio_proprio": dom_proprio
         }
         
         f = request.files.get('foto')
@@ -212,9 +306,6 @@ def perfil_publico(slug):
     slug = slug.lower().strip()
     if slug in ['static', 'favicon.ico']: return ""
 
-    # Se já estamos num domínio próprio vendo um perfil, 
-    # acessar /algo pode ser redundante, mas mantemos a lógica.
-    
     headers = get_headers()
     url = f"{DIRECTUS_URL}/items/motoboys?filter[slug][_eq]={slug}&limit=1"
     

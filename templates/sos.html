@@ -9,18 +9,23 @@
 </head>
 <body class="bg-gray-100 min-h-screen pb-10">
 
-    <div class="bg-red-600 text-white p-4 text-center animate-pulse">
-        <h1 class="text-3xl font-black uppercase flex justify-center items-center gap-2">
-            <i data-lucide="siren" class="w-8 h-8"></i> SOS EMERGÊNCIA
-        </h1>
-        <p class="text-xs font-bold uppercase tracking-widest mt-1">Dados vitais do condutor</p>
+    <div class="bg-red-600 text-white p-4 relative">
+        <a href="/painel" class="absolute top-4 right-4 bg-red-700 text-white text-[10px] font-bold px-3 py-1 rounded-full hover:bg-red-800 transition">
+            LOGIN
+        </a>
+        <div class="text-center animate-pulse">
+            <h1 class="text-3xl font-black uppercase flex justify-center items-center gap-2">
+                <i data-lucide="siren" class="w-8 h-8"></i> SOS EMERGÊNCIA
+            </h1>
+            <p class="text-xs font-bold uppercase tracking-widest mt-1">Dados vitais do condutor</p>
+        </div>
     </div>
 
     <div class="container mx-auto px-4 -mt-6">
         
         <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border-2 border-red-100">
             <div class="p-6 text-center border-b border-gray-100">
-                <img src="{{ m.foto_url }}" class="w-32 h-32 rounded-full mx-auto object-cover border-4 border-gray-100 shadow-sm mb-4">
+                <img src="{{ m.foto_url }}" class="w-32 h-32 rounded-full mx-auto object-cover border-4 border-gray-100 shadow-sm mb-4 bg-gray-200">
                 <h2 class="text-2xl font-bold text-gray-900 leading-tight">{{ m.nome_completo }}</h2>
                 {% if idade %}
                 <p class="text-gray-500 font-medium">{{ idade }} anos</p>
@@ -41,18 +46,34 @@
 
         <div class="mt-6 space-y-3">
             {% if m.contato_telefone %}
-            <a href="tel:{{ m.contato_telefone }}" class="flex items-center justify-center gap-3 w-full bg-blue-600 text-white font-bold py-5 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition">
-                <i data-lucide="phone" class="w-6 h-6"></i>
-                LIGAR: {{ m.contato_nome }}
-            </a>
-            
-            <a href="https://wa.me/55{{ m.contato_telefone }}?text=Estou%20com%20{{ m.nome_completo }}%20em%20uma%20emerg%C3%AAncia.%20Por%20favor%20retorne." class="flex items-center justify-center gap-3 w-full bg-green-500 text-white font-bold py-5 rounded-xl shadow-lg hover:bg-green-600 active:scale-95 transition">
-                <i data-lucide="message-circle" class="w-6 h-6"></i>
-                WHATSAPP: {{ m.contato_nome }}
-            </a>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                <p class="text-xs font-bold text-gray-400 uppercase mb-2 text-center">Contato Principal: {{ m.contato_nome }}</p>
+                <div class="flex gap-2">
+                    <a href="tel:{{ m.contato_telefone }}" class="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition text-sm">
+                        <i data-lucide="phone" class="w-4 h-4"></i> LIGAR
+                    </a>
+                    <a href="https://wa.me/55{{ m.contato_telefone }}?text=SOS%20Emerg%C3%AAncia:%20Estou%20com%20{{ m.nome_completo }}" class="flex-1 flex items-center justify-center gap-2 bg-green-500 text-white font-bold py-3 rounded-lg hover:bg-green-600 transition text-sm">
+                        <i data-lucide="message-circle" class="w-4 h-4"></i> WHATSAPP
+                    </a>
+                </div>
+            </div>
             {% else %}
             <div class="bg-yellow-100 text-yellow-800 p-4 rounded-xl text-center font-bold">
                 Contato de emergência não cadastrado.
+            </div>
+            {% endif %}
+
+            {% if m.contato_telefone2 %}
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+                <p class="text-xs font-bold text-gray-400 uppercase mb-2 text-center">Contato Secundário: {{ m.contato_nome2 }}</p>
+                <div class="flex gap-2">
+                    <a href="tel:{{ m.contato_telefone2 }}" class="flex-1 flex items-center justify-center gap-2 bg-gray-600 text-white font-bold py-3 rounded-lg hover:bg-gray-700 transition text-sm">
+                        <i data-lucide="phone" class="w-4 h-4"></i> LIGAR
+                    </a>
+                    <a href="https://wa.me/55{{ m.contato_telefone2 }}?text=SOS%20Emerg%C3%AAncia:%20Estou%20com%20{{ m.nome_completo }}" class="flex-1 flex items-center justify-center gap-2 bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition text-sm">
+                        <i data-lucide="message-circle" class="w-4 h-4"></i> WHATSAPP
+                    </a>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -68,8 +89,11 @@
             </div>
         </div>
 
-        <div class="mt-12 text-center pb-8">
-            <p class="text-xs text-gray-300">Sistema SOS Motoboy Leanttro</p>
+        <div class="mt-12 text-center pb-8 space-y-2">
+            <p class="text-xs text-gray-300">Sistema SOS Motoboy</p>
+            <a href="https://www.leanttro.com" target="_blank" class="block text-xs font-bold text-gray-400 hover:text-red-500 transition">
+                Desenvolvido por Leanttro - Tecnologia e Brindes
+            </a>
         </div>
 
     </div>

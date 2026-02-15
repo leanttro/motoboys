@@ -47,6 +47,10 @@
                         <input type="text" name="nome" value="{{ user.nome_completo or '' }}" class="w-full border rounded p-3">
                     </div>
                     <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">E-mail</label>
+                        <input type="email" name="email" value="{{ user.email or '' }}" class="w-full border rounded p-3">
+                    </div>
+                    <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase">Data Nascimento</label>
                         <input type="date" name="nascimento" value="{{ user.data_nascimento }}" class="w-full border rounded p-3">
                     </div>
@@ -78,8 +82,10 @@
             </div>
 
             <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                <h3 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600">3. Contato de Emergência</h3>
-                <div class="space-y-4">
+                <h3 class="font-bold text-lg mb-4 border-b pb-2 text-blue-600">3. Contatos de Emergência</h3>
+                
+                <div class="space-y-4 mb-6">
+                    <p class="text-xs font-bold text-gray-400 uppercase">Principal</p>
                     <div>
                         <label class="block text-xs font-bold text-gray-500 uppercase">Nome do Parente/Amigo</label>
                         <input type="text" name="contato_nome" value="{{ user.contato_nome or '' }}" class="w-full border rounded p-3" placeholder="Ex: Maria (Esposa)">
@@ -89,10 +95,29 @@
                         <input type="tel" name="contato_tel" value="{{ user.contato_telefone or '' }}" class="w-full border rounded p-3" placeholder="11999999999">
                     </div>
                 </div>
+
+                <div class="space-y-4 pt-4 border-t">
+                    <p class="text-xs font-bold text-gray-400 uppercase">Secundário (Opcional)</p>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">Nome do Parente/Amigo 2</label>
+                        <input type="text" name="contato_nome2" value="{{ user.contato_nome2 or '' }}" class="w-full border rounded p-3" placeholder="Ex: João (Irmão)">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase">WhatsApp 2 (Com DDD)</label>
+                        <input type="tel" name="contato_tel2" value="{{ user.contato_telefone2 or '' }}" class="w-full border rounded p-3" placeholder="11999999999">
+                    </div>
+                </div>
             </div>
 
             <button type="submit" class="w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition">SALVAR DADOS</button>
         </form>
+
+        <div class="mt-12 text-center pb-8 space-y-2">
+            <p class="text-xs text-gray-400">Sistema SOS Motoboy</p>
+            <a href="https://www.leanttro.com" target="_blank" class="block text-xs font-bold text-gray-500 hover:text-black transition">
+                Desenvolvido por Leanttro - Tecnologia e Brindes
+            </a>
+        </div>
     </div>
 </body>
 </html>
