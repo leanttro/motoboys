@@ -4,29 +4,39 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from itsdangerous import URLSafeTimedSerializer
-# --- SEGURANÇA: IMPORTANDO LIMITER ---
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "chave_secreta_sos_motoboy")
 
-# --- SEGURANÇA: CONFIGURAÇÃO DO LIMITER ---
-# Armazena na memória (memory://). Se reiniciar o servidor, zera a contagem.
-# O padrão global é 200 requisições por dia e 50 por hora por IP.
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://"
-)
+# --- SEGURANÇA NATIVA (SEM BIBLIOTECA EXTERNA) ---
+# Dicionário simples na memória para limitar requisições (Rate Limit Artesanal)
+request_log = {}
+
+def check_limit(key, limit, period_seconds):
+    now = datetime.now()
+    if key not in request_log:
+        request_log[key] = []
+    
+    # Limpa logs antigos
+    request_log[key] = [t for t in request_log[key] if t > now - timedelta(seconds=period_seconds)]
+    
+    if len(request_log[key]) >= limit:
+        return False
+        
+    request_log[key].append(now)
+    return True
+
+def get_ip():
+    if request.headers.getlist("X-Forwarded-For"):
+        return request.headers.getlist("X-Forwarded-For")[0]
+    return request.remote_addr
 
 # --- CONFIGURAÇÕES ---
 DIRECTUS_URL = os.getenv("DIRECTUS_URL", "https://api2.leanttro.com").rstrip('/')
@@ -106,18 +116,14 @@ def send_email(to_email, subject, html_body):
 # --- SEGURANÇA: MIDDLEWARE ANTI-BOT ---
 @app.before_request
 def block_scrapers():
-    # Lista de User-Agents conhecidos de scripts de raspagem
     user_agent = request.headers.get('User-Agent', '').lower()
     bots = ['python-requests', 'curl', 'wget', 'libwww-perl', 'scrapy', 'httpclient']
-    
-    # Se o User-Agent contiver nome de bot, bloqueia com 403 Forbidden
     if any(bot in user_agent for bot in bots):
-        abort(403, description="Acesso negado para scripts automatizados.")
+        abort(403, description="Acesso negado.")
 
 # --- MIDDLEWARE: VERIFICA DOMÍNIO PRÓPRIO ---
 @app.before_request
 def verificar_dominio():
-    # Não bloqueamos bots aqui para não impedir verificação, o block_scrapers roda antes ou junto.
     host_atual = request.host.split(':')[0].lower()
     g.perfil_dominio = None
     
@@ -152,8 +158,12 @@ def index():
 
 # --- CADASTRO ---
 @app.route('/cadastro', methods=['GET', 'POST'])
-@limiter.limit("5 per hour") # SEGURANÇA: Evita criação de contas em massa
 def cadastro():
+    # Rate Limit: 10 cadastros por hora por IP
+    if not check_limit(f"cad_{get_ip()}", 10, 3600):
+        flash("Muitas tentativas. Tente mais tarde.", "error")
+        return redirect('/')
+
     codigo_pre = request.args.get('codigo', '')
     
     if request.method == 'POST':
@@ -164,13 +174,11 @@ def cadastro():
         
         headers = get_headers()
         
-        # Verifica duplicidade de SLUG
         check_slug = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[slug][_eq]={slug}", headers=headers)
         if check_slug.status_code == 200 and len(check_slug.json()['data']) > 0:
             flash('Este código de adesivo já está em uso!', 'error')
             return render_template('cadastro.html', codigo=slug)
 
-        # Verifica duplicidade de EMAIL
         check_email = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
         if check_email.status_code == 200 and len(check_email.json()['data']) > 0:
             flash('Este e-mail já está cadastrado!', 'error')
@@ -198,16 +206,19 @@ def cadastro():
 
     return render_template('cadastro.html', codigo=codigo_pre)
 
-# --- LOGIN (ALTERADO PARA EMAIL) ---
+# --- LOGIN ---
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit("10 per minute") # SEGURANÇA: Proteção contra Brute Force de senha
 def login():
+    # Rate Limit: 10 tentativas por minuto
+    if not check_limit(f"login_{get_ip()}", 10, 60):
+        flash("Muitas tentativas. Aguarde.", "error")
+        return render_template('login.html')
+
     if request.method == 'POST':
-        email = request.form.get('email').strip() # PEGA EMAIL AGORA
+        email = request.form.get('email').strip()
         senha = request.form.get('senha')
         
         headers = get_headers()
-        # FILTRA POR EMAIL, NÃO MAIS POR SLUG
         r = requests.get(f"{DIRECTUS_URL}/items/motoboys?filter[email][_eq]={email}", headers=headers)
         data = r.json().get('data')
         
@@ -221,7 +232,6 @@ def login():
 
 # --- ESQUECEU SENHA ---
 @app.route('/esqueceu-senha', methods=['GET', 'POST'])
-@limiter.limit("3 per hour") # SEGURANÇA: Evita spam de email
 def esqueceu_senha():
     if request.method == 'POST':
         email = request.form.get('email').strip()
@@ -329,7 +339,6 @@ def logout():
 
 # --- ROTA PÚBLICA (SOS por Slug) ---
 @app.route('/<slug>')
-@limiter.limit("15 per minute") # SEGURANÇA: Permite acesso rápido em emergência, bloqueia scraping de milhares de perfis
 def perfil_publico(slug):
     slug = slug.lower().strip()
     if slug in ['static', 'favicon.ico']: return ""
