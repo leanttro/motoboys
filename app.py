@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session, flash, url_for, g
+from flask import Flask, render_template, request, redirect, session, flash, url_for, g, abort
 import requests
 import os
 import smtplib
@@ -9,11 +9,24 @@ from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from itsdangerous import URLSafeTimedSerializer
+# --- SEGURANÇA: IMPORTANDO LIMITER ---
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "chave_secreta_sos_motoboy")
+
+# --- SEGURANÇA: CONFIGURAÇÃO DO LIMITER ---
+# Armazena na memória (memory://). Se reiniciar o servidor, zera a contagem.
+# O padrão global é 200 requisições por dia e 50 por hora por IP.
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 # --- CONFIGURAÇÕES ---
 DIRECTUS_URL = os.getenv("DIRECTUS_URL", "https://api2.leanttro.com").rstrip('/')
@@ -90,9 +103,21 @@ def send_email(to_email, subject, html_body):
         print(f"Erro ao enviar email: {e}")
         return False
 
+# --- SEGURANÇA: MIDDLEWARE ANTI-BOT ---
+@app.before_request
+def block_scrapers():
+    # Lista de User-Agents conhecidos de scripts de raspagem
+    user_agent = request.headers.get('User-Agent', '').lower()
+    bots = ['python-requests', 'curl', 'wget', 'libwww-perl', 'scrapy', 'httpclient']
+    
+    # Se o User-Agent contiver nome de bot, bloqueia com 403 Forbidden
+    if any(bot in user_agent for bot in bots):
+        abort(403, description="Acesso negado para scripts automatizados.")
+
 # --- MIDDLEWARE: VERIFICA DOMÍNIO PRÓPRIO ---
 @app.before_request
 def verificar_dominio():
+    # Não bloqueamos bots aqui para não impedir verificação, o block_scrapers roda antes ou junto.
     host_atual = request.host.split(':')[0].lower()
     g.perfil_dominio = None
     
@@ -127,6 +152,7 @@ def index():
 
 # --- CADASTRO ---
 @app.route('/cadastro', methods=['GET', 'POST'])
+@limiter.limit("5 per hour") # SEGURANÇA: Evita criação de contas em massa
 def cadastro():
     codigo_pre = request.args.get('codigo', '')
     
@@ -174,6 +200,7 @@ def cadastro():
 
 # --- LOGIN (ALTERADO PARA EMAIL) ---
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute") # SEGURANÇA: Proteção contra Brute Force de senha
 def login():
     if request.method == 'POST':
         email = request.form.get('email').strip() # PEGA EMAIL AGORA
@@ -194,6 +221,7 @@ def login():
 
 # --- ESQUECEU SENHA ---
 @app.route('/esqueceu-senha', methods=['GET', 'POST'])
+@limiter.limit("3 per hour") # SEGURANÇA: Evita spam de email
 def esqueceu_senha():
     if request.method == 'POST':
         email = request.form.get('email').strip()
@@ -301,6 +329,7 @@ def logout():
 
 # --- ROTA PÚBLICA (SOS por Slug) ---
 @app.route('/<slug>')
+@limiter.limit("15 per minute") # SEGURANÇA: Permite acesso rápido em emergência, bloqueia scraping de milhares de perfis
 def perfil_publico(slug):
     slug = slug.lower().strip()
     if slug in ['static', 'favicon.ico']: return ""
