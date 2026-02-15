@@ -21,9 +21,6 @@
             <a href="/{{ user.slug }}" target="_blank" class="text-2xl font-black text-gray-800 underline hover:text-yellow-600 transition">
                 /{{ user.slug }}
             </a>
-            {% if user.dominio_proprio %}
-            <p class="text-xs font-bold text-green-600 mt-2 uppercase">Domínio Ativo: {{ user.dominio_proprio }}</p>
-            {% endif %}
             <p class="text-xs text-gray-600 mt-2">Este link abrirá seus dados de emergência.</p>
         </div>
 
@@ -53,13 +50,6 @@
                         <label class="block text-xs font-bold text-gray-500 uppercase">Data Nascimento</label>
                         <input type="date" name="nascimento" value="{{ user.data_nascimento }}" class="w-full border rounded p-3">
                     </div>
-                    
-                    <div>
-                        <label class="block text-xs font-bold text-blue-600 uppercase">Domínio Próprio (Opcional)</label>
-                        <input type="text" name="dominio_proprio" value="{{ user.dominio_proprio or '' }}" class="w-full border border-blue-200 bg-blue-50 rounded p-3" placeholder="Ex: www.joao.com.br">
-                        <p class="text-[10px] text-gray-400 mt-1">Digite apenas o domínio. Aponte o DNS para o servidor antes de salvar.</p>
-                    </div>
-
                 </div>
             </div>
 

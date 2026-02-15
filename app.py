@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, session, flash, url_for, g
+from flask import Flask, render_template, request, redirect, session, flash, url_for
 import requests
 import os
 from datetime import datetime
@@ -12,17 +12,9 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "chave_secreta_sos_motoboy")
 
 # --- CONFIGURAÇÕES ---
+# Ajuste aqui se sua URL do Directus for diferente
 DIRECTUS_URL = os.getenv("DIRECTUS_URL", "https://api2.leanttro.com").rstrip('/')
 DIRECTUS_TOKEN = os.getenv("DIRECTUS_TOKEN", "") 
-
-# LISTA DE DOMÍNIOS DO SISTEMA (QUE NÃO DEVEM BUSCAR PERFIL AUTOMÁTICO)
-# Adicione aqui todos os domínios onde o sistema roda como "Plataforma"
-SYSTEM_DOMAINS = [
-    'motoboys.leanttro.com',
-    'sos.leanttro.com',
-    'localhost',
-    '127.0.0.1'
-]
 
 def get_headers():
     return {"Authorization": f"Bearer {DIRECTUS_TOKEN}", "Content-Type": "application/json"}
@@ -46,59 +38,11 @@ def upload_file(file_storage):
         print(f"Erro Upload: {e}")
     return None
 
-def calcular_idade(data_nasc):
-    if not data_nasc: return ""
-    try:
-        born = datetime.strptime(data_nasc, "%Y-%m-%d")
-        today = datetime.today()
-        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-    except:
-        return ""
-
-# --- MIDDLEWARE: VERIFICA DOMÍNIO PRÓPRIO ---
-@app.before_request
-def verificar_dominio():
-    # Remove porta se existir (ex: leanttro.com:5000 -> leanttro.com)
-    host_atual = request.host.split(':')[0].lower()
-    
-    g.perfil_dominio = None
-    
-    # Se o host NÃO for um dos domínios do sistema, tenta achar um motoboy dono desse domínio
-    # Verifica se o host atual contém algum dos domínios de sistema (para pegar subdomínios também)
-    e_sistema = False
-    for sys_d in SYSTEM_DOMAINS:
-        if sys_d in host_atual:
-            e_sistema = True
-            break
-            
-    if not e_sistema:
-        try:
-            # Busca motoboy pelo campo dominio_proprio
-            # Importante: O motoboy deve cadastrar o domínio exatamente como acessa (ex: www.joao.com.br)
-            headers = get_headers()
-            url = f"{DIRECTUS_URL}/items/motoboys?filter[dominio_proprio][_eq]={host_atual}&limit=1"
-            r = requests.get(url, headers=headers)
-            data = r.json().get('data')
-            
-            if data:
-                usuario = data[0]
-                usuario['foto_url'] = get_img_url(usuario.get('foto'))
-                g.perfil_dominio = usuario
-        except Exception as e:
-            print(f"Erro verificando domínio: {e}")
-
 # --- ROTA RAIZ (HOME) ---
 @app.route('/')
 def index():
-    # 1. SE FOR DOMÍNIO PRÓPRIO (ex: www.joao.com.br), ABRE O PERFIL DIRETO
-    if g.perfil_dominio:
-        return render_template('sos.html', m=g.perfil_dominio, idade=calcular_idade(g.perfil_dominio.get('data_nascimento')))
-
-    # 2. SE JÁ TIVER LOGADO, VAI PRO PAINEL
     if session.get('motoboy_id'):
         return redirect('/painel')
-        
-    # 3. SE NÃO, MOSTRA A LANDING PAGE DO SISTEMA
     return render_template('index.html')
 
 # --- CADASTRO ---
@@ -168,9 +112,6 @@ def painel():
     headers = get_headers()
     
     if request.method == 'POST':
-        # Limpa o domínio para salvar limpo (sem http/https e barra final)
-        dom_proprio = request.form.get('dominio_proprio', '').replace('http://', '').replace('https://', '').rstrip('/')
-
         payload = {
             "nome_completo": request.form.get('nome'),
             "data_nascimento": request.form.get('nascimento'),
@@ -178,8 +119,7 @@ def painel():
             "alergias_condicoes": request.form.get('alergias'),
             "contato_nome": request.form.get('contato_nome'),
             "contato_telefone": request.form.get('contato_tel').replace(' ','').replace('-','').replace('(','').replace(')',''),
-            "plano_saude": request.form.get('plano'),
-            "dominio_proprio": dom_proprio # SALVA O DOMÍNIO AQUI
+            "plano_saude": request.form.get('plano')
         }
         
         f = request.files.get('foto')
@@ -206,15 +146,12 @@ def logout():
     session.clear()
     return redirect('/')
 
-# --- ROTA PÚBLICA (SOS por Slug) ---
+# --- ROTA PÚBLICA (SOS) ---
 @app.route('/<slug>')
 def perfil_publico(slug):
     slug = slug.lower().strip()
     if slug in ['static', 'favicon.ico']: return ""
 
-    # Se já estamos num domínio próprio vendo um perfil, 
-    # acessar /algo pode ser redundante, mas mantemos a lógica.
-    
     headers = get_headers()
     url = f"{DIRECTUS_URL}/items/motoboys?filter[slug][_eq]={slug}&limit=1"
     
@@ -228,7 +165,13 @@ def perfil_publico(slug):
         motoboy = data[0]
         motoboy['foto_url'] = get_img_url(motoboy.get('foto'))
         
-        return render_template('sos.html', m=motoboy, idade=calcular_idade(motoboy.get('data_nascimento')))
+        idade = ""
+        if motoboy.get('data_nascimento'):
+            born = datetime.strptime(motoboy['data_nascimento'], "%Y-%m-%d")
+            today = datetime.today()
+            idade = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+            
+        return render_template('sos.html', m=motoboy, idade=idade)
         
     except Exception as e:
         return "Erro ao carregar perfil."
