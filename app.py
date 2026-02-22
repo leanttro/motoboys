@@ -74,7 +74,7 @@ def upload_file(file_storage):
     try:
         url = f"{DIRECTUS_URL}/files"
         filename = secure_filename(file_storage.filename)
-        files = {'file': (filename, file_storage, file_storage.mimetype)}
+        files = {'file': (filename, file_storage.read(), file_storage.mimetype)}
         response = requests.post(url, headers=get_upload_headers(), files=files)
         if response.status_code in [200, 201]:
             return response.json()['data']['id']
@@ -298,17 +298,23 @@ def painel():
     
     if request.method == 'POST':
         dom_proprio = request.form.get('dominio_proprio', '').replace('http://', '').replace('https://', '').rstrip('/')
+        
+        nascimento = request.form.get('nascimento')
+        nascimento = nascimento if nascimento else None
+
+        tel_principal = request.form.get('contato_tel', '')
+        tel_secundario = request.form.get('contato_tel2', '')
 
         payload = {
             "nome_completo": request.form.get('nome'),
             "email": request.form.get('email'),
-            "data_nascimento": request.form.get('nascimento'),
+            "data_nascimento": nascimento,
             "tipo_sanguineo": request.form.get('sangue'),
             "alergias_condicoes": request.form.get('alergias'),
             "contato_nome": request.form.get('contato_nome'),
-            "contato_telefone": request.form.get('contato_tel').replace(' ','').replace('-','').replace('(','').replace(')',''),
+            "contato_telefone": tel_principal.replace(' ','').replace('-','').replace('(','').replace(')',''),
             "contato_nome2": request.form.get('contato_nome2'),
-            "contato_telefone2": request.form.get('contato_tel2').replace(' ','').replace('-','').replace('(','').replace(')',''),
+            "contato_telefone2": tel_secundario.replace(' ','').replace('-','').replace('(','').replace(')',''),
             "plano_saude": request.form.get('plano'),
             "dominio_proprio": dom_proprio
         }
@@ -316,10 +322,18 @@ def painel():
         f = request.files.get('foto')
         if f and f.filename:
             fid = upload_file(f)
-            if fid: payload['foto'] = fid
+            if fid: 
+                payload['foto'] = fid
+            else:
+                flash('Os dados foram salvos, mas ocorreu um erro com a foto.', 'error')
             
-        requests.patch(f"{DIRECTUS_URL}/items/motoboys/{mid}", headers=headers, json=payload)
-        flash('Dados atualizados com sucesso!', 'success')
+        r = requests.patch(f"{DIRECTUS_URL}/items/motoboys/{mid}", headers=headers, json=payload)
+        
+        if r.status_code in [200, 201]:
+            flash('Dados atualizados com sucesso!', 'success')
+        else:
+            flash('Erro ao salvar. Verifique os campos.', 'error')
+            
         return redirect('/painel')
 
     # GET
