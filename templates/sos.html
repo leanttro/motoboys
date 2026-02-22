@@ -6,8 +6,25 @@
     <title>EMERGÊNCIA | {{ m.nome_completo }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .alto-contraste {
+            background-color: #000 !important;
+            color: #fff !important;
+        }
+        .alto-contraste div:not(.bg-red-600):not(.bg-blue-600):not(.bg-green-500):not(.bg-green-600):not(.bg-gray-600):not(.bg-orange-600):not(.bg-yellow-500) {
+            background-color: #1a1a1a !important;
+            border-color: #333 !important;
+        }
+        .alto-contraste p, .alto-contraste h1, .alto-contraste h2, .alto-contraste h3, .alto-contraste span {
+            color: #fff !important;
+        }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen pb-10">
+<body class="bg-gray-100 min-h-screen pb-10 transition-colors duration-300">
+
+    <div class="bg-yellow-500 text-black p-3 text-center font-black uppercase text-xl animate-pulse">
+        Atenção: Nunca retire o capacete da vítima
+    </div>
 
     <div class="bg-red-600 text-white p-4 relative">
         <div class="text-center animate-pulse pointer-events-none">
@@ -18,9 +35,9 @@
         </div>
     </div>
 
-    <div class="container mx-auto px-4 -mt-6">
+    <div class="container mx-auto px-4 -mt-2">
         
-        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border-2 border-red-100">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden border-2 border-red-100 mt-4">
             <div class="p-6 text-center border-b border-gray-100">
                 <img src="{{ m.foto_url }}" class="w-32 h-32 rounded-full mx-auto object-cover border-4 border-gray-100 shadow-sm mb-4 bg-gray-200">
                 <h2 class="text-2xl font-bold text-gray-900 leading-tight">{{ m.nome_completo }}</h2>
@@ -73,10 +90,42 @@
                 </div>
             </div>
             {% endif %}
+
+            <h3 class="text-sm font-bold text-gray-500 uppercase ml-2 mt-6 mb-2">Acionar Socorro</h3>
+            <div class="grid grid-cols-3 gap-2">
+                <a href="tel:192" class="flex flex-col items-center justify-center gap-1 bg-red-600 text-white font-bold py-3 rounded-xl shadow-sm hover:bg-red-700 transition">
+                    <i data-lucide="ambulance" class="w-6 h-6"></i>
+                    <span class="text-[10px] uppercase">SAMU 192</span>
+                </a>
+                <a href="tel:193" class="flex flex-col items-center justify-center gap-1 bg-orange-600 text-white font-bold py-3 rounded-xl shadow-sm hover:bg-orange-700 transition">
+                    <i data-lucide="flame" class="w-6 h-6"></i>
+                    <span class="text-[10px] uppercase">Bombeiros</span>
+                </a>
+                <a href="tel:190" class="flex flex-col items-center justify-center gap-1 bg-blue-700 text-white font-bold py-3 rounded-xl shadow-sm hover:bg-blue-800 transition">
+                    <i data-lucide="shield-alert" class="w-6 h-6"></i>
+                    <span class="text-[10px] uppercase">Polícia</span>
+                </a>
+            </div>
+
+            <h3 class="text-sm font-bold text-gray-500 uppercase ml-2 mt-6 mb-2">Localização do Acidente</h3>
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center">
+                <button id="btn-localizacao" onclick="obterLocalizacao()" class="w-full bg-gray-900 text-white font-bold py-3 rounded-lg flex justify-center items-center gap-2 hover:bg-black transition text-sm mb-3">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i> VER RUA ATUAL
+                </button>
+                <div id="resultado-localizacao" class="hidden flex-col gap-3">
+                    <p id="texto-endereco" class="text-xs font-bold text-gray-700 p-3 rounded border"></p>
+                    <button onclick="compartilharLocalizacao()" class="w-full bg-green-500 text-white font-bold py-3 rounded-lg flex justify-center items-center gap-2 hover:bg-green-600 transition text-sm">
+                        <i data-lucide="share-2" class="w-4 h-4"></i> ENVIAR LOCAL
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div class="mt-8">
-            <h3 class="text-sm font-bold text-gray-500 uppercase ml-2 mb-2">Ficha Médica / Alergias</h3>
+            <div class="flex justify-between items-end mb-2">
+                <h3 class="text-sm font-bold text-gray-500 uppercase ml-2">Ficha Médica / Alergias</h3>
+                <span class="text-[10px] text-gray-400 mr-2">Atualizado: {{ m.date_updated[:10] if m.date_updated else 'Informação Recente' }}</span>
+            </div>
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-red-100">
                 {% if m.alergias_condicoes %}
                     <p class="text-lg text-gray-800 font-medium leading-relaxed">{{ m.alergias_condicoes }}</p>
@@ -98,8 +147,70 @@
 
     </div>
 
+    <button onclick="toggleContraste()" class="fixed bottom-4 right-4 bg-gray-900 text-white p-4 rounded-full shadow-2xl z-50 hover:bg-black border-2 border-gray-700">
+        <i data-lucide="moon" class="w-6 h-6"></i>
+    </button>
+
     <script>
         lucide.createIcons();
+
+        let coordsAtuais = null;
+
+        function obterLocalizacao() {
+            const btn = document.getElementById('btn-localizacao');
+            const resultado = document.getElementById('resultado-localizacao');
+            const texto = document.getElementById('texto-endereco');
+
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> BUSCANDO GPS...';
+            lucide.createIcons();
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        coordsAtuais = position.coords;
+                        try {
+                            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${coordsAtuais.latitude}&lon=${coordsAtuais.longitude}`);
+                            const data = await res.json();
+                            texto.innerText = data.display_name;
+                        } catch (e) {
+                            texto.innerText = `Coordenadas: ${coordsAtuais.latitude}, ${coordsAtuais.longitude}`;
+                        }
+                        btn.classList.add('hidden');
+                        resultado.classList.remove('hidden');
+                        resultado.classList.add('flex');
+                    },
+                    () => {
+                        btn.innerHTML = '<i data-lucide="map-pin" class="w-4 h-4"></i> TENTAR NOVAMENTE';
+                        alert('Por favor autorize o uso do GPS no seu navegador.');
+                        lucide.createIcons();
+                    },
+                    { enableHighAccuracy: true }
+                );
+            } else {
+                alert('Seu navegador não suporta GPS.');
+            }
+        }
+
+        function compartilharLocalizacao() {
+            if (!coordsAtuais) return;
+            
+            const mapsLink = `https://www.google.com/maps/search/?api=1&query=${coordsAtuais.latitude},${coordsAtuais.longitude}`;
+            const textoCompartilhar = `Atenção! Acidente de moto. Localização exata: ${mapsLink}`;
+
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Localização do Acidente',
+                    text: textoCompartilhar,
+                    url: mapsLink
+                }).catch(console.error);
+            } else {
+                window.open(`https://wa.me/?text=${encodeURIComponent(textoCompartilhar)}`, '_blank');
+            }
+        }
+
+        function toggleContraste() {
+            document.body.classList.toggle('alto-contraste');
+        }
     </script>
 </body>
 </html>
